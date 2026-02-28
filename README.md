@@ -1,51 +1,41 @@
 # FreeByte FastAPI App (Dockerized)
 
-This project is now Dockerized so you can run the full stack (FastAPI + PostgreSQL) with **one command**.
+## Security and secrets
+- Sensitive values were removed from `private.py` (file deleted).
+- App now reads config from `.env` through `settings.py` (Pydantic Settings).
 
-## One-click run with Docker
+Edit your `.env` file and set your secrets before production use.
 
-### Prerequisites
-- Docker
-- Docker Compose (v2)
-
-### Run
+## Run with Docker (auto migration)
 
 ```bash
 docker compose up --build
 ```
 
-Then open:
-- App: http://localhost:8005/home
+What happens:
+1. `db` starts (PostgreSQL)
+2. `migrate` runs `alembic upgrade head`
+3. `web` starts only after migration succeeds
 
-### Stop
+App URL:
+- http://localhost:${APP_PORT:-8005}/home
+
+## Stop
 
 ```bash
 docker compose down
 ```
 
-### Reset everything (including database data)
+## Reset database volume
 
 ```bash
 docker compose down -v
 ```
 
-## What runs
-
-- `web`: FastAPI app (`uvicorn main:app --host 0.0.0.0 --port 8005`)
-- `db`: PostgreSQL 16
-
-`DATABASE_URL` is injected automatically by `docker-compose.yml`:
-
-```text
-postgresql://postgres:postgres@db:5432/freebyte_app
-```
-
 ## Notes
-
-- On container start, the app tries to run:
+- If you change models, create a migration with Alembic and commit it:
 
 ```bash
+alembic revision --autogenerate -m "describe change"
 alembic upgrade head
 ```
-
-If migration setup is incomplete for your current branch, startup will continue and print a warning.
