@@ -1,15 +1,16 @@
+version: '3.8'
 services:
   db:
     image: postgres:16-alpine
     container_name: freebyte_db
     restart: unless-stopped
-    env_file:
-      - .env
+    env_file: .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-freebyte_app}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
+      # This maps the DB to port 5433 on the host
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -22,8 +23,8 @@ services:
   migrate:
     build: .
     container_name: freebyte_migrate
-    env_file:
-      - .env
+    env_file: .env
+    # Migration still runs inside docker network, so it talks to 'db' normally
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-freebyte_app}}
     depends_on:
@@ -36,16 +37,28 @@ services:
     build: .
     container_name: freebyte_web
     restart: unless-stopped
-    env_file:
-      - .env
+    # ------------------------------------------------------------
+    # FIX: Use Host Network to bypass Marzban firewall issues
+    # ------------------------------------------------------------
+    network_mode: "host"
+    
+    env_file: .env
     depends_on:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-freebyte_app}}
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005"]
-    ports:
-      - "${APP_PORT:-8005}:8005"
+      # IMPORTANT: Because we are on host network, we cannot use container name "db".
+      # We must connect to 127.0.0.1 on the mapped port (5433).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@127.0.0.1:5433/${POSTGRES_DB:-freebyte_app}
+    
+    # ------------------------------------------------------------
+    # FIX: Bind to 127.0.0.1 directly on the host
+    # ------------------------------------------------------------
+    command: ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8005"]
+    
+    # Remove the 'ports' section because 'network_mode: host' handles it
+    # ports:
+    #   - "${APP_PORT:-8005}:8005"
 
 volumes:
   postgres_data:
